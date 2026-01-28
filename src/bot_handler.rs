@@ -1,3 +1,4 @@
+use anyhow::{Result, Context};
 use qrcode::render::unicode;
 use qrcode::QrCode;
 use std::default::Default;
@@ -16,11 +17,11 @@ pub struct WhatsAppBot {
 }
 
 impl WhatsAppBot {
-    pub async fn new(db_path: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(db_path: &str) -> Result<Self> {
         let backend = Arc::new(
             SqliteStore::new(db_path)
                 .await
-                .expect("Failed to create SQLite store"),
+                .context("Failed to create SQLite store")?,
         );
 
         let bot = Bot::builder()
@@ -43,19 +44,19 @@ impl WhatsAppBot {
             })
             .build()
             .await
-            .expect("Failed to build bot");
+            .context("Failed to build bot")?;
 
         Ok(Self { bot })
     }
 
-    pub async fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn run(mut self) -> Result<()> {
         println!("Connecting to WhatsApp...\n");
         self.bot
             .run()
             .await
-            .expect("Failed to start bot")
+            .context("Failed to start bot")?
             .await
-            .expect("Bot error");
+            .context("Bot error")?;
         Ok(())
     }
 
