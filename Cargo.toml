@@ -1,6 +1,13 @@
 [package]
 name = "mykisah"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+whatsapp-rust = "0.2"
+whatsapp-rust-tokio-transport = "0.2"
+whatsapp-rust-ureq-http-client = "0.2"
+wacore = "0.2"
+tokio = { version = "1", features = ["full"] }
+qrcode = "0.14"
+waproto = "0.2"
