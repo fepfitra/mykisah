@@ -1,3 +1,4 @@
+use anyhow::{Result, Context};
 use crossterm::{
     cursor::MoveTo,
     execute,
@@ -6,10 +7,23 @@ use crossterm::{
 };
 use std::{
     io::{self, stdout, Write},
+    env,
 };
 
-pub async fn run_tui() -> anyhow::Result<()> {
+use crate::openrouter_client::OpenRouterClient;
+use crate::openrouter_api::{ChatMessage, MessageRole};
+
+
+pub async fn run_tui() -> Result<()> {
     let mut history: Vec<(String, String)> = Vec::new();
+
+    let openrouter_api_key = env::var("OPENROUTER_API_KEY")
+        .context("OPENROUTER_API_KEY environment variable not set")?;
+    let openrouter_model = env::var("OPENROUTER_MODEL")
+        .unwrap_or_else(|_| "nvidia/nemotron-nano-12b-v2-vl:free".to_string());
+
+    let openrouter_client = OpenRouterClient::new(openrouter_api_key, openrouter_model);
+
 
     execute!(stdout(), Clear(ClearType::All), MoveTo(0, 0))?;
 
@@ -43,8 +57,23 @@ pub async fn run_tui() -> anyhow::Result<()> {
 
         history.push(("You".to_string(), input.clone()));
 
-        if input.to_lowercase() == "ping" {
-            history.push(("AI".to_string(), "pong".to_string()));
+        let chat_messages = vec![ChatMessage {
+            role: MessageRole::User,
+            content: input.clone(),
+        }];
+
+        match openrouter_client.get_chat_completion(chat_messages).await {
+            Ok(response) => {
+                if let Some(choice) = response.choices.first() {
+                    let ai_response = choice.message.content.clone();
+                    history.push(("AI".to_string(), ai_response));
+                } else {
+                    history.push(("AI".to_string(), "OpenRouter returned no choices.".to_string()));
+                }
+            }
+            Err(e) => {
+                history.push(("AI".to_string(), format!("Error getting OpenRouter completion: {}", e)));
+            }
         }
     }
 

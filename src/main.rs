@@ -1,22 +1,22 @@
 mod bot_handler;
+mod openrouter_api;
+mod openrouter_client;
 mod tui_handler;
 
-use bot_handler::WhatsAppBot;
 use anyhow::Result;
-use clap::Parser; // Add this import
+use bot_handler::WhatsAppBot;
+use clap::Parser;
 
-/// A WhatsApp bot and AI chat application
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
-    /// Run the application in TUI mode
     #[arg(long)]
     tui: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse(); // Use clap to parse arguments
+    let cli = Cli::parse();
 
     if cli.tui {
         println!("Starting in TUI mode.");
@@ -29,4 +29,3 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-

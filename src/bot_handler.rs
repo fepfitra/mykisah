@@ -1,19 +1,26 @@
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use std::env;
+use std::sync::Arc;
+
 use qrcode::render::unicode;
 use qrcode::QrCode;
-use std::default::Default;
-use std::sync::Arc;
+
 use wacore::types::events::Event;
 use wacore::types::message::MessageInfo;
+use waproto::whatsapp;
 use whatsapp_rust::bot::Bot;
 use whatsapp_rust::store::SqliteStore;
+use whatsapp_rust::Client;
 use whatsapp_rust_tokio_transport::TokioWebSocketTransportFactory;
 use whatsapp_rust_ureq_http_client::UreqHttpClient;
-use whatsapp_rust::Client;
-use waproto::whatsapp;
+
+use crate::openrouter_api::{ChatMessage, MessageRole};
+use crate::openrouter_client::OpenRouterClient;
 
 pub struct WhatsAppBot {
     bot: Bot,
+    #[allow(dead_code)]
+    openrouter_client: Arc<OpenRouterClient>,
 }
 
 impl WhatsAppBot {
@@ -24,29 +31,51 @@ impl WhatsAppBot {
                 .context("Failed to create SQLite store")?,
         );
 
+        let openrouter_api_key = env::var("OPENROUTER_API_KEY")
+            .context("OPENROUTER_API_KEY environment variable not set")?;
+        let openrouter_model = env::var("OPENROUTER_MODEL")
+            .unwrap_or_else(|_| "nvidia/nemotron-nano-12b-v2-vl:free".to_string());
+
+        let openrouter_client_for_bot_struct =
+            Arc::new(OpenRouterClient::new(openrouter_api_key, openrouter_model));
+        let openrouter_client_for_closure = Arc::clone(&openrouter_client_for_bot_struct);
+
         let bot = Bot::builder()
             .with_backend(backend)
             .with_transport_factory(TokioWebSocketTransportFactory::new())
             .with_http_client(UreqHttpClient::new())
-            .on_event(|event, client| async move {
-                match event {
-                    Event::PairingQrCode { code, .. } => {
-                        Self::handle_pairing_qr_code(code);
+            .on_event(move |event, client| {
+                let openrouter_client_cloned_for_async_block =
+                    Arc::clone(&openrouter_client_for_closure);
+                async move {
+                    match event {
+                        Event::PairingQrCode { code, .. } => {
+                            Self::handle_pairing_qr_code(code);
+                        }
+                        Event::Connected(_) => {
+                            println!("✓ Successfully connected to WhatsApp!");
+                        }
+                        Event::Message(msg, info) => {
+                            Self::handle_message(
+                                client,
+                                *msg,
+                                info,
+                                openrouter_client_cloned_for_async_block,
+                            )
+                            .await;
+                        }
+                        _ => {}
                     }
-                    Event::Connected(_) => {
-                        println!("✓ Successfully connected to WhatsApp!");
-                    }
-                    Event::Message(msg, info) => {
-                        Self::handle_message(client, *msg, info).await;
-                    }
-                    _ => {}
                 }
             })
             .build()
             .await
             .context("Failed to build bot")?;
 
-        Ok(Self { bot })
+        Ok(Self {
+            bot,
+            openrouter_client: openrouter_client_for_bot_struct,
+        })
     }
 
     pub async fn run(mut self) -> Result<()> {
@@ -86,6 +115,7 @@ impl WhatsAppBot {
         client: Arc<Client>,
         msg: whatsapp::Message,
         info: MessageInfo,
+        openrouter_client: Arc<OpenRouterClient>,
     ) {
         println!("Message from {}: {:?}", info.source.sender, msg);
 
@@ -111,7 +141,44 @@ impl WhatsAppBot {
                 {
                     println!("Failed to send pong: {}", e);
                 }
+            } else {
+                let chat_messages = vec![ChatMessage {
+                    role: MessageRole::User,
+                    content: text.clone(),
+                }];
+
+                match openrouter_client.get_chat_completion(chat_messages).await {
+                    Ok(response) => {
+                        if let Some(choice) = response.choices.first() {
+                            let ai_response = choice.message.content.clone();
+                            if let Err(e) = client
+                                .send_message(
+                                    info.source.chat.clone(),
+                                    whatsapp::Message {
+                                        conversation: Some(ai_response),
+                                        ..Default::default()
+                                    },
+                                )
+                                .await
+                            {
+                                println!("Failed to send AI response: {}", e);
+                            }
+                        } else {
+                            println!(
+                                "OpenRouter returned no choices for message from {}.",
+                                info.source.sender
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        println!(
+                            "Failed to get OpenRouter completion for message from {}: {}",
+                            info.source.sender, e
+                        );
+                    }
+                }
             }
         }
     }
 }
+
