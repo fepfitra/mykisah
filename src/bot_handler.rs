@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use qrcode::render::unicode;
@@ -16,7 +17,7 @@ use whatsapp_rust_ureq_http_client::UreqHttpClient;
 
 use crate::openrouter_api::{ChatMessage, MessageRole};
 use crate::openrouter_client::OpenRouterClient;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 pub struct WhatsAppBot {
     bot: Bot,
@@ -25,7 +26,7 @@ pub struct WhatsAppBot {
 }
 
 impl WhatsAppBot {
-    pub async fn new(db_path: &str) -> Result<Self> {
+    pub async fn new(db_path: &str, kisah_path: Option<PathBuf>) -> Result<Self> {
         let backend = Arc::new(
             SqliteStore::new(db_path)
                 .await
@@ -37,8 +38,10 @@ impl WhatsAppBot {
         let openrouter_model = env::var("OPENROUTER_MODEL")
             .unwrap_or_else(|_| "nvidia/nemotron-nano-12b-v2-vl:free".to_string());
 
-        let openrouter_client_for_bot_struct =
-            Arc::new(OpenRouterClient::new(openrouter_api_key, openrouter_model));
+        let openrouter_client_for_bot_struct = Arc::new(
+            OpenRouterClient::new(openrouter_api_key, openrouter_model, kisah_path).await?,
+        );
+
         let openrouter_client_for_closure = Arc::clone(&openrouter_client_for_bot_struct);
 
         let bot = Bot::builder()
@@ -182,4 +185,3 @@ impl WhatsAppBot {
         }
     }
 }
-

@@ -9,6 +9,7 @@ use clap::Parser;
 use once_cell::sync::Lazy;
 use tracing::{info, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use std::path::PathBuf;
 
 static TRACING_SETUP: Lazy<()> = Lazy::new(|| {
     let filter_layer = EnvFilter::builder()
@@ -30,6 +31,8 @@ static TRACING_SETUP: Lazy<()> = Lazy::new(|| {
 struct Cli {
     #[arg(long)]
     tui: bool,
+    #[arg(long, value_name = "PATH", help = "Path to the kisah directory (e.g., ~/kisah)")]
+    kisah_path: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -40,7 +43,7 @@ async fn main() -> Result<()> {
 
     if cli.tui {
         info!("Starting in TUI mode.");
-        tui_handler::run_tui().await?;
+        tui_handler::run_tui(cli.kisah_path).await?;
     } else {
         info!("Starting WhatsApp QR Code Pairing...");
         
@@ -62,7 +65,7 @@ async fn main() -> Result<()> {
         }
 
         let db_path_str = db_path.to_str().expect("Invalid database path");
-        let bot = WhatsAppBot::new(db_path_str).await?;
+        let bot = WhatsAppBot::new(db_path_str, cli.kisah_path).await?;
         bot.run().await?;
     }
 
