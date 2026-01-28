@@ -108,4 +108,8 @@ impl OpenRouterClient {
             ))
         }
     }
+
+    pub fn get_kisah_path(&self) -> Option<&PathBuf> {
+        self.kisah_path.as_ref()
+    }
 }

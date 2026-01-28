@@ -43,7 +43,11 @@ async fn main() -> Result<()> {
 
     if cli.tui {
         info!("Starting in TUI mode.");
-        tui_handler::run_tui(cli.kisah_path).await?;
+        let final_kisah_path = cli.kisah_path.unwrap_or_else(|| {
+            let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
+            PathBuf::from(&home_dir).join("kisah")
+        });
+        tui_handler::run_tui(Some(final_kisah_path)).await?;
     } else {
         info!("Starting WhatsApp QR Code Pairing...");
         
@@ -64,8 +68,13 @@ async fn main() -> Result<()> {
             info!("Migration complete.");
         }
 
+        let final_kisah_path = cli.kisah_path.unwrap_or_else(|| {
+            let home_dir = std::env::var("HOME").expect("HOME environment variable not set");
+            PathBuf::from(&home_dir).join("kisah")
+        });
+
         let db_path_str = db_path.to_str().expect("Invalid database path");
-        let bot = WhatsAppBot::new(db_path_str, cli.kisah_path).await?;
+        let bot = WhatsAppBot::new(db_path_str, Some(final_kisah_path)).await?;
         bot.run().await?;
     }
 

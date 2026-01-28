@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use std::env;
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 
 use qrcode::render::unicode;
@@ -132,6 +133,41 @@ impl WhatsAppBot {
         };
 
         if let Some(text) = message_text {
+            if text.starts_with("!") {
+                let cmd_str = &text[1..];
+                let current_dir = openrouter_client.get_kisah_path().unwrap().clone();
+
+                let output = Command::new("sh")
+                    .arg("-c")
+                    .arg(cmd_str)
+                    .current_dir(&current_dir)
+                    .output();
+
+                let response_text = match output {
+                    Ok(output) => {
+                        if output.status.success() {
+                            String::from_utf8_lossy(&output.stdout).to_string()
+                        } else {
+                            format!("Error: {}", String::from_utf8_lossy(&output.stderr))
+                        }
+                    },
+                    Err(e) => format!("Failed to execute command: {}", e),
+                };
+
+                if let Err(e) = client
+                    .send_message(
+                        info.source.chat.clone(),
+                        whatsapp::Message {
+                            conversation: Some(response_text),
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                {
+                    error!("Failed to send shell command response: {}", e);
+                }
+                return;
+            }
             if text.to_lowercase().trim() == "ping" {
                 if let Err(e) = client
                     .send_message(
