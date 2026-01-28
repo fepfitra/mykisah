@@ -16,6 +16,7 @@ use whatsapp_rust_ureq_http_client::UreqHttpClient;
 
 use crate::openrouter_api::{ChatMessage, MessageRole};
 use crate::openrouter_client::OpenRouterClient;
+use tracing::{info, warn, error};
 
 pub struct WhatsAppBot {
     bot: Bot,
@@ -53,7 +54,7 @@ impl WhatsAppBot {
                             Self::handle_pairing_qr_code(code);
                         }
                         Event::Connected(_) => {
-                            println!("✓ Successfully connected to WhatsApp!");
+                            info!("✓ Successfully connected to WhatsApp!");
                         }
                         Event::Message(msg, info) => {
                             Self::handle_message(
@@ -79,7 +80,7 @@ impl WhatsAppBot {
     }
 
     pub async fn run(mut self) -> Result<()> {
-        println!("Connecting to WhatsApp...\n");
+        info!("Connecting to WhatsApp...");
         self.bot
             .run()
             .await
@@ -105,8 +106,8 @@ impl WhatsAppBot {
                 println!("\nOpen WhatsApp → Settings → Linked Devices → Link a Device\n");
             }
             Err(e) => {
-                println!("Failed to generate QR code: {}", e);
-                println!("Raw code: {}", code);
+                error!("Failed to generate QR code: {}", e);
+                error!("Raw code: {}", code);
             }
         }
     }
@@ -117,7 +118,7 @@ impl WhatsAppBot {
         info: MessageInfo,
         openrouter_client: Arc<OpenRouterClient>,
     ) {
-        println!("Message from {}: {:?}", info.source.sender, msg);
+        info!("Message from {}: {:?}", info.source.sender, msg);
 
         let message_text: Option<String> = if let Some(conversation_text) = &msg.conversation {
             Some(conversation_text.clone())
@@ -139,7 +140,7 @@ impl WhatsAppBot {
                     )
                     .await
                 {
-                    println!("Failed to send pong: {}", e);
+                    error!("Failed to send pong: {}", e);
                 }
             } else {
                 let chat_messages = vec![ChatMessage {
@@ -161,17 +162,17 @@ impl WhatsAppBot {
                                 )
                                 .await
                             {
-                                println!("Failed to send AI response: {}", e);
+                                error!("Failed to send AI response: {}", e);
                             }
                         } else {
-                            println!(
+                            warn!(
                                 "OpenRouter returned no choices for message from {}.",
                                 info.source.sender
                             );
                         }
                     }
                     Err(e) => {
-                        println!(
+                        error!(
                             "Failed to get OpenRouter completion for message from {}: {}",
                             info.source.sender, e
                         );

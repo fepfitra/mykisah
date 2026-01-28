@@ -1,6 +1,7 @@
 use crate::openrouter_api::{ChatCompletionRequest, ChatCompletionResponse, ChatMessage};
 use anyhow::{anyhow, Result};
 use reqwest::Client as ReqwestClient;
+use tracing::error;
 
 pub struct OpenRouterClient {
     client: ReqwestClient,
@@ -49,6 +50,11 @@ impl OpenRouterClient {
         } else {
             let status = response.status();
             let text = response.text().await.unwrap_or_default();
+            error!(
+                "OpenRouter API returned an error: Status: {}, Response: {}",
+                status,
+                text
+            );
             Err(anyhow!(
                 "OpenRouter API returned an error: Status: {}, Response: {}",
                 status,
